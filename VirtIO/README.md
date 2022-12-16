@@ -26,5 +26,5 @@
 ```
 
 然后重新启动虚拟机  
-修改client.c和server.c源文件中相关文件路径  
+修改client.c和server.c源文件中相关文件路径 CONTROL_PORT  
 在虚拟机中运行client.c，在主机中运行server.c
