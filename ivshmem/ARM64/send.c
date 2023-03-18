@@ -36,7 +36,9 @@ struct pr_buff_packet{
     unsigned char src;
     unsigned char op;
     unsigned char len;
-    unsigned char p[packet_length-3];
+    unsigned int sec;
+    unsigned int usec;
+    //unsigned char p[packet_length-3];
 };
 
 //存放共享内存的队列的信息
@@ -57,7 +59,9 @@ struct packet_msg{
     //unsigned char dest;
     //unsigned ychar src;
     unsigned char op; 
-    unsigned char p[packet_length-2];
+    unsigned int sec;
+    unsigned int usec; 
+    //unsigned char p[packet_length-2];
 };
 
 struct RWBUFF 
@@ -78,7 +82,7 @@ int insert_mesg(struct mesg *msg);
 int send_msg(unsigned char *p,unsigned int length,unsigned char priority,unsigned char  dest);
 int send_packet();
 
-const char *filename = "/dev/ivshmem0";
+const char *filename = "/dev/shm/lzh";
 unsigned int my_filesize =  0x10000;
 
 unsigned int count =0;
@@ -93,7 +97,8 @@ int main(int argc,char **argv)
     int max_num=my_filesize/packet_length;//块数目
 
     struct packet_msg *rev_msg; //接收块内存
-    struct pr_buff_packet *pbp;
+    struct packet_msg time_msg;
+//    struct pr_buff_packet time_msg;
     
     struct timeval time;
     
@@ -103,11 +108,7 @@ int main(int argc,char **argv)
     printf("my_id:%d\n",my_id);
     printf("my_offset:%d\n",txbuff[(my_id-1)/2].offset);
 
-    //testchar[0]=my_id;
     testchar[1]=0;
-    //testchar[2]=61; 
-    //testchar[3]=1+'0';
-    //testchar[63]=0;
     
     pthread_t send_thread,rev_thread;
     
@@ -115,46 +116,52 @@ int main(int argc,char **argv)
     if (result= 0) {
         printf("发送线程创建失败");
         return 0;
-    } //*/
+    } 
     
     while(1)
     {
     	num = 10;
     	while(num>0){
     		//收包处理
-    		i=0;
+    		i=1;
 		if(testchar[1] == 0){
     			gettimeofday(&time,NULL);
-    			sprintf(testchar,"%c%c%c%ld,%ld\n",my_id+1,1,61,time.tv_sec,time.tv_usec);
-    			send_msg(testchar,64,2,3);
-    			printf("t1: %ld,%ld\n",time.tv_sec,time.tv_usec);
+    			
+//    			sprintf(testchar,"%c%c%c%ld,%ld\n",my_id+1,1,61,time.tv_sec,time.tv_usec);
+    			
+    			time_msg.value = my_id+1;
+        		time_msg.op = 1;
+//        		time_msg.len = 61;
+        		time_msg.sec = time.tv_sec;
+        		time_msg.usec = time.tv_usec;
+    			
+    			send_msg(&time_msg,64,2,3);
+//    			printf("t1: %ld,%ld\n",time.tv_sec,time.tv_usec);
     			testchar[1] = 1;
     		}
-    		while(1){
-    			i++;
-    			if(i>=max_num)i=0;
-    			if(rev_msg[i].value%2!=0){
-    				//printf("rev:%d,%d,%d\n",num,rev_msg[i].value,rev_msg[i].op);
-        			//printf("rev:%s\n",rev_msg[i].p);
+    		while(rev_msg[i].value%2!=0){  		
+//    			printf("i:%d,value:%d\n",i,rev_msg[i].value);	
         			gettimeofday(&time,NULL);
         			rev_msg[i].value = 0;
         			
         			//发包处理,收到消息才立刻发送消息
-        			//testchar[1]=2;
-        			//testchar[3] = (testchar[3]==126)? 1+'0' : testchar[3]+1;
-        			sprintf(testchar,"%c%c%c%ld,%ld\n",my_id+1,4,61,time.tv_sec,time.tv_usec);
-        			printf("t4: %ld,%ld\n",time.tv_sec,time.tv_usec);
-        			send_msg(testchar,64,2,3);
+//        			sprintf(testchar,"%c%c%c%ld,%ld\n",my_id+1,4,61,time.tv_sec,time.tv_usec);
+        			
+        			time_msg.value = my_id+1;
+        			time_msg.op = 4;
+//        			time_msg.len = 61;
+        			time_msg.sec = time.tv_sec;
+        			time_msg.usec = time.tv_usec;
+        			
+//        			printf("t4: %ld,%ld\n",time.tv_sec,time.tv_usec);
+        			send_msg(&time_msg,64,2,3);
         			testchar[1] = 0;
         			num--;
-        			break;
-    				}
-
-    			}
+    				break;
+		}
     			
         	
     	}
-        //sleep(5);
     }
     return 0;
 }
@@ -285,17 +292,18 @@ int send_msg(unsigned char *p,unsigned int length,unsigned char priority,unsigne
     case 2:
         if((state&0x07)==0){
            state= (state|0x04);
-           j=send_num;
+//           j=send_num;
+	   j=1;
              while(1){
-             	j++;
-            	if(j>=n)j=0;
+             	//j++;
+            	//if(j>=n)j=0;
                 if(txbuff[i].buff[j].value==0)
                 {
                    memcpy((unsigned char*)&txbuff[i].buff[j],p,length);
-                   printf("send_msg:ok,%d,%s\n",j,p);
+//                   printf("send_msg:ok,%d,%s,id=%d\n",j,p,my_id);
                    txbuff[i].buff[j].value =my_id;
                    if(head[2]->next==NULL)state=(state&(~0x04));
-                   send_num=j;
+                //   send_num=j;
                    return 1;
                 }
             }

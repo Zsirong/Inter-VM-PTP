@@ -29,7 +29,7 @@ unsigned char dest_id =  1;
 unsigned char state=0; //用来表示当前的发送队列状态
 unsigned int send_num = 0;
 
-#define OFFSET_LOG "/home/lzh/rtc/time 2/offset.log"
+#define OFFSET_LOG "/home/zsr/desktop/zsr/Inter-VM-PTP/ivshmem/ARM64/offset.log"
 
 #pragma  pack(1)
 
@@ -39,7 +39,9 @@ struct pr_buff_packet{
     unsigned char src;
     unsigned char op;
     unsigned char len;
-    unsigned char p[packet_length-3];
+    unsigned int sec;
+    unsigned int usec;
+//    unsigned char p[packet_length-3];
 };
 
 //存放共享内存的队列的信息
@@ -59,8 +61,10 @@ struct packet_msg{
     unsigned char value;
     //unsigned char dest;
     //unsigned ychar src;
-    unsigned char op; 
-    unsigned char p[packet_length-2];
+    unsigned char op;
+    unsigned int sec;
+    unsigned int usec; 
+    //unsigned char p[packet_length-2];
 };
 
 struct RWBUFF 
@@ -83,10 +87,10 @@ void * send_hander();
 
 void getTheTime( char str[62], struct timeval *time);
 long getOffset(struct timeval t1, struct timeval t2, struct timeval t3, struct timeval t4);
-long getAveOffset(long off[],int n);
+long getAveOffset(struct timeval off[][4],int n);
 int setTheTime(long offset);
 
-const char *filename = "/dev/ivshmem0";
+const char *filename = "/dev/shm/lzh";
 unsigned int my_filesize =  0x10000;
 
 unsigned int count =0;
@@ -109,21 +113,19 @@ int main(int argc,char **argv)
     int max_num=my_filesize/packet_length;//块数目
 
     struct packet_msg *rev_msg; //接收块内存
-    struct pr_buff_packet *pbp;
+    struct packet_msg time_msg;
+//    struct pr_buff_packet time_msg;
     
-    struct timeval time,t1,t2,t3,t4;
+    struct timeval t1,t2,t3,t4;
+    struct timeval time[11][4];
 
     rev_msg = txbuff[(my_id-1)/2].buff;
-    for(i=0;i<max_num;i++)
-       rev_msg[i].value=0;
+    for(i=0;i<max_num;i++){ 
+	    rev_msg[i].value=0;
+    }
+
     printf("my_id:%d\n",my_id);
     printf("my_offset:%d\n",txbuff[(my_id-1)/2].offset);
-
-    //testchar[0]=my_id;
-    //testchar[1]=3;
-    //testchar[2]=61; 
-    //testchar[3]=1+'0';
-    //testchar[63]=0;
 
     pthread_t send_thread,rev_thread;
 
@@ -132,7 +134,7 @@ int main(int argc,char **argv)
         printf("发送线程创建失败");
         return 0;
     } 
-    
+   
     i=1; 
     while(1)
     {
@@ -141,41 +143,52 @@ int main(int argc,char **argv)
     		printf("open file err\n");
     		exit(0);
     	}
-    	while(num>=0){
-    		
-    		while(1){
-    			if(rev_msg[i].value%2!=0){
-    				//printf("rev :%d,%d,%d,%d\n", i, num, rev_msg[i].value,rev_msg[i].op);
-                		//printf("rev :%s\n", rev_msg[i].p);
-                		gettimeofday(&t2,NULL);
+    	while(num>=0){	
+    		while(rev_msg[i].value%2!=0){
+//    				gettimeofday(&t2,NULL);
+                		gettimeofday(&time[num][1],NULL);
                 		if(rev_msg[i].op == 1){
                 			//发包处理;
-                			getTheTime(rev_msg[i].p,&t1);
-					printf("ttt\n");
+                			//getTheTime(rev_msg[i].p,&t1);
                 			rev_msg[i].value = 0;
-	            			//t2 = time;
-                			printf("t1: %ld,%ld\n",t1.tv_sec,t1.tv_usec);
-                			printf("t2: %ld,%ld\n",t2.tv_sec,t2.tv_usec);
-        				gettimeofday(&t3,NULL);
-        				sprintf(testchar,"%c%c%c%ld,%ld",my_id+1,3,61,t3.tv_sec,t3.tv_usec);
-	       				printf("t3: %ld,%ld\n",t3.tv_sec,t3.tv_usec);
-        				send_msg(testchar,64,2,1);
+                			
+                			time[num][0].tv_sec = rev_msg[i].sec;
+                			time[num][0].tv_usec = rev_msg[i].usec;
+                			
+//                			time[num][0] = t1;
+                			                			
+//                			printf("t1: %ld,%ld\n",time[num][0].tv_sec,time[num][0].tv_usec);
+//                			printf("t2: %ld,%ld\n",time[num][1].tv_sec,time[num][1].tv_usec);
+                			
+        				gettimeofday(&time[num][2],NULL);
+        				
+        				time_msg.value = my_id+1;
+        				time_msg.op = 3;
+//        				time_msg.len = 61;
+        				time_msg.sec = time[num][2].tv_sec;
+        				time_msg.usec = time[num][2].tv_usec;
+//        				sprintf(testchar,"%c%c%c%ld,%ld",my_id+1,3,61,t3.tv_sec,t3.tv_usec);
+        				
+        				send_msg(&time_msg,64,2,1);
+//        				printf("t3: %ld,%ld\n",time[num][2].tv_sec,time[num][2].tv_usec);
+        				
                 		}else if(rev_msg[i].op == 4){
-                			getTheTime(rev_msg[i].p,&t4);
+//                			getTheTime(rev_msg[i].p,&t4);
+//					time_msg = &rev_msg[i];
+                			time[num][3].tv_sec = rev_msg[i].sec;
+                			time[num][3].tv_usec = rev_msg[i].usec;
                 			rev_msg[i].value = 0;
-                			printf("t4: %ld,%ld\n",t4.tv_sec,t4.tv_usec);
-                			time_offset[num] = getOffset(t1,t2,t3,t4);
-//                			printf("---------------%d: %ld us--------------------\n",num,time_offset[num]);
+                			
+//                			printf("t4: %ld,%ld\n\n",time[num][3].tv_sec,time[num][3].tv_usec);
+                			
+//                			time_offset[num] = getOffset(time[num][0],time[num][1],time[num][2],time[num][3]);
                 			num--;
                 		}
                 		break;
-    			}
     		}
-    		i++;
-    		if(i>=max_num)i=0;
-    		
     	}
-    	time_aveoffset = getAveOffset(time_offset,10);
+    	
+    	time_aveoffset = getAveOffset(time,10);
     	printf("---------the average timeoffset is %ld----------\n",time_aveoffset);
     	sprintf(buf_log,"%ld\n",time_aveoffset);
     	write(fd_offset,buf_log,strlen(buf_log));
@@ -211,6 +224,7 @@ unsigned char * get_buff_map(unsigned int filesize, unsigned int offset)
         printf("%s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
+//    printf("mm%d\n",map);
     close(fd);
     return map;
 }
@@ -220,8 +234,8 @@ unsigned char * get_buff_map(unsigned int filesize, unsigned int offset)
 
 void mmap_init()
 {
-    //my_id = 3;
-    //dest_id = 1;
+//    my_id = 3;
+//    dest_id = 1;
     int i;
     i = (my_id-1)/2;
     txbuff[i].id = my_id;
@@ -283,10 +297,17 @@ long getOffset(struct timeval t1, struct timeval t2, struct timeval t3, struct t
 }
 
 //计算平均时间偏差
-long getAveOffset(long off[],int n){
+long getAveOffset(struct timeval off[][4],int n){
+  long time_offset[n] ;
   long offset = 0;
-  for(int i=0;i<n;i++){
-    offset = offset + off[i];
+  int i;
+  
+  for( i=0 ; i<n ; i++ ){
+  	time_offset[i] = getOffset(off[i][0],off[i][1],off[i][2],off[i][3]);
+  }
+  
+  for(i=0;i<n;i++){
+    offset = offset + time_offset[i];
   }
   offset = offset / 10;
   return offset;
@@ -377,17 +398,18 @@ int send_msg(unsigned char *p,unsigned int length,unsigned char priority,unsigne
     case 2:
         if((state&0x07)==0){
            state= (state|0x04);
-           j=send_num;
+//           j=send_num;
+	   j=1;
              while(1){
-             	j++;
-            	if(j>=n)j=0;
+//             	j++;
+//            	if(j>=n)j=0;
                 if(txbuff[i].buff[j].value==0)
                 {
                    memcpy((unsigned char*)&txbuff[i].buff[j],p,length);
-                   printf("send_msg:ok,%d,%s\n",j,p);
+//                   printf("send_msg:ok,%d,%s,id:%d\n",j,p,my_id);
                    txbuff[i].buff[j].value =my_id;
                    if(head[2]->next==NULL)state=(state&(~0x04));
-                   send_num=j;
+//                   send_num=j;
                    return 1;
                 }
             }
