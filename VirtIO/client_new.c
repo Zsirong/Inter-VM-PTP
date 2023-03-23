@@ -16,13 +16,14 @@
 
 void getTheTime( char* str, struct timeval *time);
 long getOffset(struct timeval t1, struct timeval t2, struct timeval t3, struct timeval t4);
-long getAveOffset(long off[],int n);
+long getAveOffset(struct timeval off[][4],int n);
 int setTheTime(long offSet);
 
 int main()
 {
       pid_t pc;
       struct timeval t1, t2, t3, t4;
+      struct timeval time[11][4];
       int fd_con;    //通信文件
       int fd_log;    //记录文件
       int fd_debug;   //调试文件
@@ -35,20 +36,6 @@ int main()
       long AveOffset;
       long offsettime[11];
     
-      pc =fork(); 
-      if(pc<0)
-      {
-        printf("error fork \n");
-          exit(1);
-      } else if(pc>0) {
-          exit(0);    // 结束父进程
-      }
-      setsid();       
-      chdir("/");     
-      umask(0);       
-      for(int i = 0;i < MAXFILE; i++)  
-          close(i);
-      pid = getpid();  //获取守护进程的pid
       while(1)
       {
             //打开记录测试过程的文件
@@ -66,73 +53,48 @@ int main()
           return -1;
         }
       
-     while(t!=0){
+     while(t>=0){
           //获取主钟发来的第一次消息，记录t1,t2
-          ret = read(fd_con,buf_read,128);
+          ret = read(fd_con,&time[t][0],sizeof(struct timeval));
           if(ret == -1){
               fprintf(stderr,"can't write data from guestOS\n");
               return -1;
           }
-          //因为这里是读取普通设备文件，为非阻塞函数，可能会读取到上一次写入的数据,
-          //重新循环的时候，文件重新打开，文件读写指针会移动到开头。
-          while(!strcmp(buf_read,buf_read_cp)){
-            //相等的话，则继续读文件。
-            ret = read(fd_con,buf_read,128);
-            if(ret == -1){
-                  fprintf(stderr,"can't write data from guestOS\n");
-                  return -1;
-            }
-          }
-          gettimeofday(&t2, NULL);
-          strcpy(buf_read_cp,buf_read);
-          //printf("t1:from host:%s", buf_read);
-          getTheTime(buf_read, &t1);
-          sprintf(buf_log,"buffer(t1):%s",buf_read);
-          write(fd_debug,buf_log,strlen(buf_log));
+          
+          gettimeofday(&time[t][1], NULL);
+
+//          sprintf(buf_log,"buffer(t1):%ld,%ld\n",time[t][0].tv_sec,time[t][0].tv_usec);
+//          write(fd_debug,buf_log,strlen(buf_log));
 
           //发送消息给主钟，记录t3
-          gettimeofday(&t3,NULL);
-          sprintf(buf_write,"%ld,%ld",t3.tv_sec,t3.tv_usec);
-          write(fd_con,buf_write,128);
+          gettimeofday(&time[t][2],NULL);
+//          sprintf(buf_write,"%ld,%ld",t3.tv_sec,t3.tv_usec);
+          write(fd_con,&time[t][2],sizeof(struct timeval));
           if(ret == -1){
               fprintf(stderr,"can't write data from guestOS\n");
               return -1;
           }
 
           //获取主钟消息，记录t4
-          ret = read(fd_con,buf_read,128);
+          ret = read(fd_con,&time[t][3],sizeof(struct timeval));
           if(ret == -1){
               fprintf(stderr,"can't write data from guestOS\n");
               return -1;
           }
-          getTheTime(buf_read, &t4);
-          //strcpy(buf_read_cp,buf_read);
-          sprintf(buf_log,"buffer(t4):%s",buf_read);
-          write(fd_debug,buf_log,strlen(buf_log));
+
+//          sprintf(buf_log,"buffer(t4):%ld,%ld\n",time[t][3].tv_sec,time[t][3].tv_usec);
+//          write(fd_debug,buf_log,strlen(buf_log));
           //printf("t4:from host:%s", buf_read);
-/*
-          printf("t1:%ld,%ld\n", t1.tv_sec, t1.tv_usec);
-          printf("t2:%ld,%ld\n", t2.tv_sec, t2.tv_usec);
-          printf("t3:%ld,%ld\n", t3.tv_sec, t3.tv_usec);
-          printf("t4:%ld,%ld\n", t4.tv_sec, t4.tv_usec);
-  */
-          sprintf(buf_log,"t1:%ld,%ld\n",t1.tv_sec,t1.tv_usec);
-          write(fd_debug,buf_log,strlen(buf_log));
-          sprintf(buf_log,"t2:%ld,%ld\n",t2.tv_sec,t2.tv_usec);
-          write(fd_debug,buf_log,strlen(buf_log));
-          sprintf(buf_log,"t3:%ld,%ld\n",t3.tv_sec,t3.tv_usec);
-          write(fd_debug,buf_log,strlen(buf_log));
-          sprintf(buf_log,"t4:%ld,%ld\n\n",t4.tv_sec,t4.tv_usec);
-          write(fd_debug,buf_log,strlen(buf_log));
           
           //计算时间偏差
-          offsettime[10-t] = getOffset(t1, t2, t3, t4);
-          printf("offset: %ld us\n\n", offsettime[10-t]);
+//          offsettime[10-t] = getOffset(t1, t2, t3, t4);
+//          printf("offset: %ld us\n\n", offsettime[10-t]);
   
           t = t - 1;
       }
          //计算平均时间偏差
-      AveOffset = getAveOffset(offsettime,10);
+      AveOffset = getAveOffset(time,10);
+      printf("offset: %ld us\n",AveOffset);
       //printf("Before, the average offset is %ld us\n", beforeOffset);
           
           //根据时间偏差修改系统时间
@@ -196,10 +158,17 @@ long getOffset(struct timeval t1, struct timeval t2, struct timeval t3, struct t
 }
 
 //计算平均时间偏差
-long getAveOffset(long off[],int n){
+long getAveOffset(struct timeval off[][4],int n){
+  long time_offset[n];
   long offset = 0;
-  for(int i=0;i<n;i++){
-    offset = offset + off[i];
+  int i;
+  
+  for( i=0 ; i<n ; i++ ){
+  	time_offset[i] = getOffset(off[i][0],off[i][1],off[i][2],off[i][3]);
+  }
+  
+  for( i=0 ; i<n ; i++ ){
+    offset = offset + time_offset[i];
   }
   offset = offset / 10;
   return offset;
