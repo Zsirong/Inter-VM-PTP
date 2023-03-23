@@ -27,21 +27,8 @@ int main()
     char buf_write[128];
     char buf_log[128];
     int pid;
-      
-    pc =fork(); 
-    if(pc<0)
-    {
-        printf("error fork \n");
-        exit(1);
-    } else if(pc>0) {
-        exit(0);    // 结束父进程
-    }
-    setsid();       
-    chdir("/");     
-    umask(0);       
-    for(i = 0;i < MAXFILE; i++)  
-        close(i);
-    pid = getpid();  //获取守护进程的pid
+
+
     while(1)
     {
         //打开记录测试过程的文件
@@ -70,40 +57,37 @@ int main()
     }
     //printf(" connect success\n");
   
-    while(t!=0){
+    while(t>=0){
         //第一次主钟发送消息，将他t1发送给从钟
         gettimeofday(&time,NULL);
-        sprintf(buf_write, "%ld,%ld\n", time.tv_sec, time.tv_usec);
-        ret = write(sock_fd1, buf_write, sizeof(buf_write));
+	ret = write(sock_fd1,&time,sizeof(struct timeval));
         if(ret == -1)
         {
             fprintf(stderr,"can't write data from host\n");
             return -1;
         }
-        //printf("t1:%ld,%ld\n", time.tv_sec, time.tv_usec);
-        sprintf(buf_log,"t1:%s",buf_write);
-          write(fd_debug,buf_log,strlen(buf_log));
+//        sprintf(buf_log,"t1:%ld,%ld\n",time.tv_sec, time.tv_usec);
+//        write(fd_debug,buf_log,strlen(buf_log));
         
         //获取从钟第一次发送消息,此时为t4
-        read(sock_fd1, buf_read, 128);
+	read(sock_fd1,&time,sizeof(struct timeval));
+		
         gettimeofday(&time,NULL);
-        sprintf(buf_write,"%ld,%ld\n",time.tv_sec,time.tv_usec);
-        ret = write(sock_fd1, buf_write, sizeof(buf_write));
+	ret = write(sock_fd1,&time,sizeof(struct timeval));
         if(ret == -1)
         {
             fprintf(stderr,"can't write data from host\n");
             return -1;
         }
-        //printf("t4:%ld,%ld\n", time.tv_sec, time.tv_usec);
-        sprintf(buf_log,"t4:%s\n",buf_write);
-          write(fd_debug,buf_log,strlen(buf_log));
+//        sprintf(buf_log,"t4:%ld,%ld\n",time.tv_sec, time.tv_usec);
+//        write(fd_debug,buf_log,strlen(buf_log));
   
         t--;
     }     
     close(sock_fd1);
     close(fd_debug);
-    sleep(9);
-    usleep(800000);
+    sleep(5);
+//    usleep(800000);
     }
 }
 
