@@ -26,19 +26,14 @@ int main()
     int i,fd,ret,t;
     char buf_log[128];
 
-
-    while(1)
+    //打开记录测试过程的文件
+    if((fd_debug=open(Debug_LOG,O_CREAT|O_WRONLY|O_APPEND,0600))<0)
     {
-        //打开记录测试过程的文件
-//        if((fd_debug=open(Debug_LOG,O_CREAT|O_WRONLY|O_APPEND,0600))<0)
-//        {
-//          printf("open file err\n");
-//          exit(0);
-//        }
-        
-      t=1;
-      //记录10次测试时间
-      sock_fd1 = socket(AF_UNIX, SOCK_STREAM, 0);
+       printf("open file err\n");
+       exit(0);
+    }
+    
+    sock_fd1 = socket(AF_UNIX, SOCK_STREAM, 0);
     if ( sock_fd1 == -1 ) {
         fprintf(stderr, "Error: Socket1 can not be created !! \n");
           fprintf(stderr, "errno : %d\n", errno);
@@ -53,9 +48,13 @@ int main()
       fprintf(stderr, "sock1 Connect Failed!\n");
       return -1;
     }
-    //printf(" connect success\n");
+
+    while(1)
+    {
+        
+      t=1;
   
-    while(t>=0){
+      while(t>=0){
         //第一次主钟发送消息，将他t1发送给从钟
 //        gettimeofday(&time_ns,NULL);
 	clock_gettime(CLOCK_REALTIME,&time_ns);
@@ -83,11 +82,13 @@ int main()
 //        write(fd_debug,buf_log,strlen(buf_log));
   
         t--;
-    }     
+      } 
+    
+//    sleep(5);
+    }
+    
     close(sock_fd1);
     close(fd_debug);
-    sleep(5);
-    }
 }
 
 
